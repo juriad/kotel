@@ -19,6 +19,7 @@ class KotelLoader:
         self.logger.debug('Creating curl')
         c = pycurl.Curl()
         c.setopt(pycurl.COOKIEFILE, '')
+        c.setopt(pycurl.TIMEOUT, 3)
         c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
         return c
 
