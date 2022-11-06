@@ -81,7 +81,11 @@ class InfluxLoader:
             measurements = self.measurements.keys()
         stored = 0
         for measurement in measurements:
-            it = self._apply(data, measurement)
+            try:
+                it = self._apply(data, measurement)
+            except KeyError as e:
+                self.logger.error('Incorrect input data; missing key; data=%s', data, exc_info=e)
+                raise e
             self.logger.debug('Storing data point of measurement %s into influx', self.prefix + measurement)
             self.logger.debug('Fields: %s', it)
             stored += 1 if self.client.write_points([it], 's') else 0

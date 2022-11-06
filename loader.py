@@ -99,6 +99,7 @@ def main(config):
     scheduler = prepare_scheduler(config, logger)
     prepare_job(config, logger, kl, il, scheduler)
     scheduler.start()
+    #print(kl.load_pages())
 
 
 if __name__ == '__main__':
