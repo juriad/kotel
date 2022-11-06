@@ -65,9 +65,13 @@ class KotelLoader:
             else:
                 return v
 
+        xml_inputs = etree.fromstring(content).findall('INPUT')
+        if not xml_inputs:
+            raise ValueError('No inputs found on page %s; content: %s', page, content)
+
         inputs = {
             i.attrib['NAME']: retype(i.attrib['NAME'], i.attrib['VALUE'])
-            for i in etree.fromstring(content).findall('INPUT')
+            for i in xml_inputs
         }
         inputs['content'] = content  # for debugging
         self.logger.debug('Found %d inputs in page %s', len(inputs), page)
