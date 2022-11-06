@@ -1,8 +1,11 @@
+from logging import Logger
+
 from influxdb import InfluxDBClient
 
 
 class InfluxLoader:
-    def __init__(self, hostname, port, username, password, database, prefix, logger):
+    def __init__(self, hostname: str, port: int, username: str, password: str, database: str, prefix: str,
+                 logger: Logger):
         self.client = InfluxDBClient(hostname, port, username, password)
         self.client.switch_database(database)
         logger.debug('Connected to influx at %s with username %s, using database %s',
@@ -67,7 +70,7 @@ class InfluxLoader:
             }
         }
 
-    def _apply(self, data, measurement):
+    def _apply(self, data: dict, measurement: str):
         return {
             'measurement': self.prefix + measurement,
             'fields': {
@@ -76,7 +79,7 @@ class InfluxLoader:
             }
         }
 
-    def load(self, data, measurements=None):
+    def load(self, data: dict, measurements: dict = None):
         if measurements is None:
             measurements = self.measurements.keys()
         stored = 0

@@ -1,5 +1,5 @@
 # configuration
-import configparser
+from configparser import ConfigParser
 import sys
 
 # logging
@@ -7,15 +7,15 @@ import logging
 import logging.handlers
 
 # scheduling
-import apscheduler
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 # loader modules
-import kotel_loader
-import influx_loader
+from kotel_loader import KotelLoader
+from influx_loader import InfluxLoader
 
 
-def prepare_logging(config):
+def prepare_logging(config: ConfigParser):
     if 'logger' not in config:
         print('Missing section logger.')
         config['logger'] = {}
@@ -37,7 +37,7 @@ def prepare_logging(config):
     return logger
 
 
-def prepare_kotel(config, logger):
+def prepare_kotel(config: ConfigParser, logger: logging.Logger):
     if 'kotel' not in config:
         logger.error('Missing section kotel.')
         sys.exit(1)
@@ -45,11 +45,11 @@ def prepare_kotel(config, logger):
     kotel_domain = kotel_config.get('domain')
     kotel_password = kotel_config.get('password', '00000000')
     kotel_type_override = {'__R23658_UDINT_u': float}
-    loader = kotel_loader.KotelLoader(kotel_domain, kotel_password, kotel_type_override, logger)
+    loader = KotelLoader(kotel_domain, kotel_password, kotel_type_override, logger)
     return loader
 
 
-def prepare_influx(config, logger):
+def prepare_influx(config: ConfigParser, logger: logging.Logger):
     if 'influx' not in config:
         logger.error('Missing section influx.')
         sys.exit(1)
@@ -60,12 +60,12 @@ def prepare_influx(config, logger):
     influx_password = influx_config.get('password')
     influx_database = influx_config.get('database')
     influx_prefix = influx_config.get('prefix', '')
-    loader = influx_loader.InfluxLoader(influx_hostname, influx_port, influx_username, influx_password,
-                                        influx_database, influx_prefix, logger)
+    loader = InfluxLoader(influx_hostname, influx_port, influx_username, influx_password,
+                          influx_database, influx_prefix, logger)
     return loader
 
 
-def prepare_scheduler(config, logger):
+def prepare_scheduler(_config: ConfigParser, logger: logging.Logger):
     scheduler = BlockingScheduler()
 
     def log_event(event):
@@ -74,16 +74,17 @@ def prepare_scheduler(config, logger):
         else:
             logger.info('The job finished successfully')
 
-    scheduler.add_listener(log_event, apscheduler.events.EVENT_JOB_EXECUTED | apscheduler.events.EVENT_JOB_ERROR)
+    scheduler.add_listener(log_event, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     return scheduler
 
 
-def prepare_job(config, logger, kl, il, scheduler):
+def prepare_job(config: ConfigParser, logger: logging.Logger, kl: KotelLoader,
+                il: InfluxLoader, scheduler: BlockingScheduler):
     if 'job' not in config:
         logger.error('Missing section job.')
         sys.exit(1)
     job_config = config['job']
-    job_interval = int(job_config.get('interval_seconds', 60))
+    job_interval = int(job_config.get('interval_seconds', '60'))
 
     def job():
         data = kl.load_pages()
@@ -92,21 +93,25 @@ def prepare_job(config, logger, kl, il, scheduler):
     scheduler.add_job(job, 'interval', seconds=job_interval)
 
 
-def main(config):
+def start(config: ConfigParser):
     logger = prepare_logging(config)
     kl = prepare_kotel(config, logger)
     il = prepare_influx(config, logger)
     scheduler = prepare_scheduler(config, logger)
     prepare_job(config, logger, kl, il, scheduler)
     scheduler.start()
-    #print(kl.load_pages())
+    # print(kl.load_pages())
 
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) != 2:
         print('One argument is expected.')
         sys.exit(1)
 
-    config = configparser.ConfigParser()
+    config = ConfigParser()
     config.read(sys.argv[1])
-    main(config)
+    start(config)
+
+
+if __name__ == '__main__':
+    main()

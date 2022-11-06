@@ -1,13 +1,15 @@
 import hashlib
 import xml.etree.ElementTree as etree
 from io import BytesIO
+from logging import Logger
+from typing import Callable, Any
 from urllib.parse import urlencode
 
 import pycurl
 
 
 class KotelLoader:
-    def __init__(self, domain, password, type_override, logger):
+    def __init__(self, domain: str, password: str, type_override: dict[str, Callable[[str], Any]], logger: Logger):
         self.domain = domain
         self.password = password
         self.logger = logger
@@ -23,7 +25,7 @@ class KotelLoader:
         c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
         return c
 
-    def _login_curl(self, c):
+    def _login_curl(self, c: pycurl.Curl):
         c.setopt(pycurl.URL, self.domain + 'syswww/login.xml')
         c.setopt(pycurl.FOLLOWLOCATION, True)
         c.perform()
@@ -42,15 +44,15 @@ class KotelLoader:
         c.perform()
         self.logger.debug('Logged in using pass=%s', sha1_hash)
 
-    def _page_curl(self, c, page, type_override):
+    def _page_curl(self, c: pycurl.Curl, page: str, type_override: dict[str, Callable[[str], Any]]):
         buffer = BytesIO()
         c.setopt(pycurl.URL, self.domain + page)
-        c.setopt(c.WRITEDATA, buffer)
+        c.setopt(pycurl.WRITEDATA, buffer)
         c.perform()
         content = buffer.getvalue().decode('utf-8')
         self.logger.debug('Loaded page %s', page)
 
-        def retype(_n, v):
+        def retype(_n: str, v: str):
             if _n in type_override:
                 return type_override[_n](v)
 
@@ -67,10 +69,11 @@ class KotelLoader:
             i.attrib['NAME']: retype(i.attrib['NAME'], i.attrib['VALUE'])
             for i in etree.fromstring(content).findall('INPUT')
         }
+        inputs['content'] = content  # for debugging
         self.logger.debug('Found %d inputs in page %s', len(inputs), page)
         return inputs
 
-    def _destroy_curl(self, c):
+    def _destroy_curl(self, c: pycurl.Curl):
         self.logger.debug('Destroying curl')
         c.close()
 
@@ -83,25 +86,26 @@ class KotelLoader:
         's': 211  # statuses
     }
 
-    def _do_load(self, pages, type_override, c):
+    def _do_load(self, pages: dict[str, int], type_override: dict[str, Callable[[str], Any]], c: pycurl.Curl):
         pages_dict = {
             p: self._page_curl(c, 'PAGE%d.XML' % _n, type_override)
             for (p, _n) in pages.items()
         }
         return pages_dict
 
-    def _load(self, pages, type_override):
+    def _load(self, pages: dict[str, int], type_override: dict[str, Callable[[str], Any]]):
         if self.curl is not None:
             try:
                 return self._do_load(pages, type_override, self.curl)
-            except Exception:
+            except Exception as e:
+                self.logger.warning("Error during fetching; trying again with a fresh curl", exc_info=e)
                 self.curl = None
 
         self.curl = self._create_curl()
         self._login_curl(self.curl)
         return self._do_load(pages, type_override, self.curl)
 
-    def load_pages(self, pages=None, type_override=None):
+    def load_pages(self, pages: dict[str, int] = None, type_override: dict[str, Callable[[str], Any]] = None):
         if pages is None:
             pages = self.pages
         if type_override is None:
